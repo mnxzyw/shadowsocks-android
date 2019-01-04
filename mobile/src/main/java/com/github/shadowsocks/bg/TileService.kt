@@ -26,7 +26,7 @@ import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService as BaseTileService
 import androidx.annotation.RequiresApi
 import androidx.core.content.getSystemService
-import com.github.shadowsocks.App.Companion.app
+import com.github.shadowsocks.Core
 import com.github.shadowsocks.R
 import com.github.shadowsocks.ShadowsocksConnection
 import com.github.shadowsocks.aidl.IShadowsocksService
@@ -39,6 +39,7 @@ class TileService : BaseTileService(), ShadowsocksConnection.Interface {
     private val iconBusy by lazy { Icon.createWithResource(this, R.drawable.ic_service_busy) }
     private val iconConnected by lazy { Icon.createWithResource(this, R.drawable.ic_service_active) }
     private val keyguard by lazy { getSystemService<KeyguardManager>()!! }
+    private var tapPending = false
 
     override val serviceCallback: IShadowsocksServiceCallback.Stub by lazy {
         @RequiresApi(24)
@@ -69,16 +70,21 @@ class TileService : BaseTileService(), ShadowsocksConnection.Interface {
         }
     }
 
-    override fun onServiceConnected(service: IShadowsocksService) =
-            serviceCallback.stateChanged(service.state, service.profileName, null)
+    override fun onServiceConnected(service: IShadowsocksService) {
+        serviceCallback.stateChanged(service.state, service.profileName, null)
+        if (tapPending) {
+            tapPending = false
+            onClick()
+        }
+    }
 
     override fun onStartListening() {
         super.onStartListening()
         connection.connect()
     }
     override fun onStopListening() {
-        super.onStopListening()
         connection.disconnect()
+        super.onStopListening()
     }
 
     override fun onClick() {
@@ -86,10 +92,10 @@ class TileService : BaseTileService(), ShadowsocksConnection.Interface {
     }
 
     private fun toggle() {
-        val service = connection.service ?: return
-        when (service.state) {
-            BaseService.STOPPED -> app.startService()
-            BaseService.CONNECTED -> app.stopService()
+        val service = connection.service
+        if (service == null) tapPending = true else when (service.state) {
+            BaseService.STOPPED -> Core.startService()
+            BaseService.CONNECTED -> Core.stopService()
         }
     }
 }

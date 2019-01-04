@@ -5,7 +5,6 @@ import java.util.regex.Pattern
 apply plugin: 'com.android.application'
 apply plugin: 'io.fabric'
 apply plugin: 'kotlin-android'
-apply plugin: 'kotlin-kapt'
 
 def getCurrentFlavor() {
     String task = getGradle().getStartParameter().getTaskRequests().toString()
@@ -23,16 +22,11 @@ android {
         applicationId "com.github.shadowsocks"
         minSdkVersion rootProject.minSdkVersion
         targetSdkVersion rootProject.sdkVersion
-        versionCode 4060100
-        versionName "4.6.1"
+        versionCode rootProject.versionCode
+        versionName rootProject.versionName
         testApplicationId "com.github.shadowsocks.test"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-        resConfigs "fa", "fr", "ja", "ko", "ru", "zh-rCN", "zh-rTW"
-        javaCompileOptions {
-            annotationProcessorOptions {
-                arguments = ["room.schemaLocation": "$projectDir/schemas".toString()]
-            }
-        }
+        resConfigs "fa", "fr", "ja", "ko", "ru", "tr", "zh-rCN", "zh-rTW"
     }
     buildTypes {
         debug {
@@ -49,8 +43,6 @@ android {
     splits {
         abi {
             enable true
-            reset()
-            include 'armeabi-v7a', 'arm64-v8a', 'x86'
             universalApk true
         }
     }
@@ -61,24 +53,14 @@ android {
 
 dependencies {
     implementation project(':core')
-    implementation "android.arch.work:work-runtime-ktx:$workVersion"
-    implementation "androidx.browser:browser:$androidxVersion"
-    implementation "androidx.room:room-runtime:$roomVersion"
-    implementation 'com.crashlytics.sdk.android:crashlytics:2.9.4'
-    implementation 'com.google.android.gms:play-services-vision:15.0.2'
-    implementation 'com.google.firebase:firebase-ads:15.0.1'
-    implementation 'com.google.firebase:firebase-config:16.0.0'
-    implementation 'com.google.firebase:firebase-core:16.0.0'
-    implementation 'com.squareup.okhttp3:okhttp:3.11.0'
+    implementation "androidx.browser:browser:1.0.0"
+    implementation 'com.google.android.gms:play-services-vision:17.0.2'
+    implementation 'com.google.firebase:firebase-ads:17.1.2'
     implementation "com.takisoft.preferencex:preferencex-simplemenu:$preferencexVersion"
     implementation 'com.twofortyfouram:android-plugin-api-for-locale:1.0.4'
-    implementation 'eu.chainfire:libsuperuser:1.0.0.201704021214'
     implementation 'net.glxn.qrgen:android:2.0'
     implementation 'xyz.belvi.mobilevision:barcodescanner:2.0.3'
-    kapt "androidx.room:room-compiler:$roomVersion"
-    testImplementation "androidx.room:room-testing:$roomVersion"
     testImplementation "junit:junit:$junitVersion"
-    androidTestImplementation "android.arch.work:work-testing:$workVersion"
     androidTestImplementation "androidx.test:runner:$androidTestVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidEspressoVersion"
 }
@@ -88,7 +70,7 @@ repositories {
 
 apply plugin: 'com.google.gms.google-services'
 
-ext.abiCodes = ['armeabi-v7a': 1, 'arm64-v8a': 2, x86: 3]
+ext.abiCodes = ['armeabi-v7a': 1, 'arm64-v8a': 2, x86: 3, x86_64: 4]
 if (getCurrentFlavor() == 'release') android.applicationVariants.all { variant ->
     variant.outputs.each { output ->
         def offset = project.ext.abiCodes.get(output.getFilter(OutputFile.ABI))

@@ -1,6 +1,8 @@
 import org.apache.tools.ant.taskdefs.condition.Os
 
 apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlin-kapt'
 
 android {
     buildToolsVersion rootProject.buildToolsVersion
@@ -9,15 +11,20 @@ android {
     defaultConfig {
         minSdkVersion rootProject.minSdkVersion
         targetSdkVersion rootProject.sdkVersion
-        versionCode 1
-        versionName "1.0.0"
+        versionCode rootProject.versionCode
+        versionName rootProject.versionName
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
         externalNativeBuild {
             ndkBuild {
-                abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86'
+                abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'
                 arguments "-j${Runtime.runtime.availableProcessors()}"
+            }
+        }
+        javaCompileOptions {
+            annotationProcessorOptions {
+                arguments = ["room.schemaLocation": "$projectDir/schemas".toString()]
             }
         }
     }
@@ -56,15 +63,27 @@ task goClean(type: Exec) {
 }
 
 tasks.whenTaskAdded { task ->
-  if ((task.name == 'generateJsonModelDebug' ||
-          task.name == 'generateJsonModelRelease')) {
-      task.dependsOn(goBuild)
+    if ((task.name == 'generateJsonModelDebug' || task.name == 'generateJsonModelRelease')) {
+        task.dependsOn(goBuild)
     }
 }
 
 dependencies {
     api project(':plugin')
+    api "android.arch.work:work-runtime-ktx:$workVersion"
+    api "androidx.lifecycle:lifecycle-extensions:$lifecycleVersion"
+    api "androidx.lifecycle:lifecycle-viewmodel-ktx:$lifecycleVersion"
+    api "androidx.preference:preference:1.0.0"
+    api "androidx.room:room-runtime:$roomVersion"
+    api 'com.crashlytics.sdk.android:crashlytics:2.9.8'
+    api 'com.google.firebase:firebase-config:16.1.2'
+    api 'com.google.firebase:firebase-core:16.0.6'
+    api 'com.squareup.okhttp3:okhttp:3.12.1'
+    api "com.takisoft.preferencex:preferencex:$preferencexVersion"
+    kapt "androidx.room:room-compiler:$roomVersion"
+    testImplementation "androidx.room:room-testing:$roomVersion"
     testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "android.arch.work:work-testing:$workVersion"
     androidTestImplementation "androidx.test:runner:$androidTestVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidEspressoVersion"
 }
