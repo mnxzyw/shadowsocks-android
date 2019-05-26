@@ -43,7 +43,7 @@ object Key {
 
     const val route = "route"
 
-    const val isAutoConnect = "isAutoConnect"
+    const val persistAcrossReboot = "isAutoConnect"
     const val directBootAware = "directBootAware"
 
     const val proxyApps = "isProxyApps"
@@ -65,6 +65,7 @@ object Key {
     const val dirty = "profileDirty"
 
     const val tfo = "tcp_fastopen"
+    const val hosts = "hosts"
     const val assetUpdateTime = "assetUpdateTime"
 
     // TV specific values

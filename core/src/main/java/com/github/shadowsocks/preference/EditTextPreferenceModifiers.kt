@@ -1,7 +1,7 @@
 /*******************************************************************************
  *                                                                             *
- *  Copyright (C) 2018 by Max Lv <max.c.lv@gmail.com>                          *
- *  Copyright (C) 2018 by Mygod Studio <contact-shadowsocks-android@mygod.be>  *
+ *  Copyright (C) 2019 by Max Lv <max.c.lv@gmail.com>                          *
+ *  Copyright (C) 2019 by Mygod Studio <contact-shadowsocks-android@mygod.be>  *
  *                                                                             *
  *  This program is free software: you can redistribute it and/or modify       *
  *  it under the terms of the GNU General Public License as published by       *
@@ -18,37 +18,28 @@
  *                                                                             *
  *******************************************************************************/
 
-package com.github.shadowsocks.bg
+package com.github.shadowsocks.preference
 
-import android.util.Log
-import androidx.core.os.bundleOf
-import com.github.shadowsocks.Core
-import com.github.shadowsocks.core.R
-import com.google.firebase.remoteconfig.FirebaseRemoteConfig
-import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlin.coroutines.resume
+import android.graphics.Typeface
+import android.text.InputFilter
+import android.view.inputmethod.EditorInfo
+import android.widget.EditText
+import androidx.preference.EditTextPreference
 
-object RemoteConfig {
-    private val config by lazy { FirebaseRemoteConfig.getInstance().apply { setDefaults(R.xml.default_configs) } }
-
-    private fun Exception.log() {
-        Log.w("RemoteConfig", this)
-        Core.analytics.logEvent("femote_config_failure", bundleOf(Pair(javaClass.simpleName, message)))
+object EditTextPreferenceModifiers {
+    object Monospace : EditTextPreference.OnBindEditTextListener {
+        override fun onBindEditText(editText: EditText) {
+            editText.typeface = Typeface.MONOSPACE
+        }
     }
 
-    fun scheduleFetch() = config.fetch().addOnCompleteListener {
-        if (it.isSuccessful) config.activate() else it.exception?.log()
-    }
+    object Port : EditTextPreference.OnBindEditTextListener {
+        private val portLengthFilter = arrayOf(InputFilter.LengthFilter(5))
 
-    suspend fun fetch() = suspendCancellableCoroutine<Pair<FirebaseRemoteConfig, Boolean>> { cont ->
-        config.fetch().addOnCompleteListener {
-            if (it.isSuccessful) {
-                config.activate()
-                cont.resume(config to true)
-            } else {
-                it.exception?.log()
-                cont.resume(config to false)
-            }
+        override fun onBindEditText(editText: EditText) {
+            editText.inputType = EditorInfo.TYPE_CLASS_NUMBER
+            editText.filters = portLengthFilter
+            editText.setSingleLine()
         }
     }
 }

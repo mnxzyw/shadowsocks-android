@@ -49,10 +49,12 @@ import com.github.shadowsocks.database.ProfileManager
 import com.github.shadowsocks.preference.DataStore
 import com.github.shadowsocks.utils.DirectBoot
 import com.github.shadowsocks.utils.Key
+import com.github.shadowsocks.utils.SingleInstanceActivity
 import com.google.android.material.snackbar.Snackbar
 import kotlinx.android.synthetic.main.layout_apps.*
 import kotlinx.android.synthetic.main.layout_apps_item.view.*
 import kotlinx.coroutines.*
+import kotlin.coroutines.coroutineContext
 
 class AppManager : AppCompatActivity() {
     companion object {
@@ -68,7 +70,7 @@ class AppManager : AppCompatActivity() {
                     receiver = null
                     cachedApps = null
                 }
-                AppManager.instance?.loadApps()
+                instance?.loadApps()
             }
             // Labels and icons can change on configuration (locale, etc.) changes, therefore they are not cached.
             val cachedApps = cachedApps ?: pm.getInstalledPackages(PackageManager.GET_PERMISSIONS)
@@ -108,7 +110,7 @@ class AppManager : AppCompatActivity() {
         }
 
         fun handlePayload(payloads: List<String>) {
-            if (payloads.contains(AppManager.SWITCH)) itemView.itemcheck.isChecked = isProxiedApp(item)
+            if (payloads.contains(SWITCH)) itemView.itemcheck.isChecked = isProxiedApp(item)
         }
 
         override fun onClick(v: View?) {
@@ -116,7 +118,7 @@ class AppManager : AppCompatActivity() {
             DataStore.individual = apps.filter { isProxiedApp(it) }.joinToString("\n") { it.packageName }
             DataStore.dirty = true
 
-            appsAdapter.notifyItemRangeChanged(0, appsAdapter.itemCount, AppManager.SWITCH)
+            appsAdapter.notifyItemRangeChanged(0, appsAdapter.itemCount, SWITCH)
         }
     }
 
@@ -125,7 +127,7 @@ class AppManager : AppCompatActivity() {
 
         suspend fun reload() {
             apps = getCachedApps(packageManager).map { (packageName, packageInfo) ->
-                yield()
+                coroutineContext[Job]!!.ensureActive()
                 ProxiedApp(packageManager, packageInfo.applicationInfo, packageName)
             }.sortedWith(compareBy({ !isProxiedApp(it) }, { it.name.toString() }))
         }
@@ -196,7 +198,7 @@ class AppManager : AppCompatActivity() {
     @UiThread
     private fun loadApps() {
         loader?.cancel()
-        loader = GlobalScope.launch(Dispatchers.Main, CoroutineStart.UNDISPATCHED) {
+        loader = GlobalScope.launch(Dispatchers.Main.immediate) {
             loading.crossFadeFrom(list)
             val adapter = list.adapter as AppsAdapter
             withContext(Dispatchers.IO) { adapter.reload() }
@@ -207,6 +209,7 @@ class AppManager : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        SingleInstanceActivity.register(this) ?: return
         setContentView(R.layout.layout_apps)
         setSupportActionBar(toolbar)
         supportActionBar!!.setDisplayHomeAsUpEnabled(true)
@@ -280,7 +283,7 @@ class AppManager : AppCompatActivity() {
                         DataStore.dirty = true
                         Snackbar.make(list, R.string.action_import_msg, Snackbar.LENGTH_LONG).show()
                         initProxiedUids(apps)
-                        appsAdapter.notifyItemRangeChanged(0, appsAdapter.itemCount, AppManager.SWITCH)
+                        appsAdapter.notifyItemRangeChanged(0, appsAdapter.itemCount, SWITCH)
                         return true
                     } catch (_: IllegalArgumentException) { }
                 }

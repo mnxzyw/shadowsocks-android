@@ -1,7 +1,7 @@
 /*******************************************************************************
  *                                                                             *
- *  Copyright (C) 2018 by Max Lv <max.c.lv@gmail.com>                          *
- *  Copyright (C) 2018 by Mygod Studio <contact-shadowsocks-android@mygod.be>  *
+ *  Copyright (C) 2019 by Max Lv <max.c.lv@gmail.com>                          *
+ *  Copyright (C) 2019 by Mygod Studio <contact-shadowsocks-android@mygod.be>  *
  *                                                                             *
  *  This program is free software: you can redistribute it and/or modify       *
  *  it under the terms of the GNU General Public License as published by       *
@@ -18,37 +18,28 @@
  *                                                                             *
  *******************************************************************************/
 
-package com.github.shadowsocks.bg
+package com.github.shadowsocks.utils
 
-import android.util.Log
-import androidx.core.os.bundleOf
-import com.github.shadowsocks.Core
-import com.github.shadowsocks.core.R
-import com.google.firebase.remoteconfig.FirebaseRemoteConfig
-import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlin.coroutines.resume
+import androidx.activity.ComponentActivity
+import androidx.annotation.MainThread
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
 
-object RemoteConfig {
-    private val config by lazy { FirebaseRemoteConfig.getInstance().apply { setDefaults(R.xml.default_configs) } }
+/**
+ * See also: https://stackoverflow.com/a/30821062/2245107
+ */
+object SingleInstanceActivity : DefaultLifecycleObserver {
+    private val active = mutableSetOf<Class<LifecycleOwner>>()
 
-    private fun Exception.log() {
-        Log.w("RemoteConfig", this)
-        Core.analytics.logEvent("femote_config_failure", bundleOf(Pair(javaClass.simpleName, message)))
+    @MainThread
+    fun register(activity: ComponentActivity) = if (active.add(activity.javaClass)) apply {
+        activity.lifecycle.addObserver(this)
+    } else {
+        activity.finish()
+        null
     }
 
-    fun scheduleFetch() = config.fetch().addOnCompleteListener {
-        if (it.isSuccessful) config.activate() else it.exception?.log()
-    }
-
-    suspend fun fetch() = suspendCancellableCoroutine<Pair<FirebaseRemoteConfig, Boolean>> { cont ->
-        config.fetch().addOnCompleteListener {
-            if (it.isSuccessful) {
-                config.activate()
-                cont.resume(config to true)
-            } else {
-                it.exception?.log()
-                cont.resume(config to false)
-            }
-        }
+    override fun onDestroy(owner: LifecycleOwner) {
+        check(active.remove(owner.javaClass)) { "Double destroy?" }
     }
 }

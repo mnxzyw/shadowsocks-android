@@ -87,7 +87,7 @@ data class Profile(
                     if (match != null) {
                         val profile = Profile()
                         feature?.copyFeatureSettingsTo(profile)
-                        profile.method = match.groupValues[1].toLowerCase()
+                        profile.method = match.groupValues[1].toLowerCase(Locale.ENGLISH)
                         profile.password = match.groupValues[2]
                         profile.host = match.groupValues[3]
                         profile.remotePort = match.groupValues[4].toInt()
@@ -244,12 +244,12 @@ data class Profile(
     }
 
     fun toUri(): Uri {
+        val auth = Base64.encodeToString("$method:$password".toByteArray(),
+                Base64.NO_PADDING or Base64.NO_WRAP or Base64.URL_SAFE)
+        val wrappedHost = if (host.contains(':')) "[$host]" else host
         val builder = Uri.Builder()
                 .scheme("ss")
-                .encodedAuthority("%s@%s:%d".format(Locale.ENGLISH,
-                        Base64.encodeToString("$method:$password".toByteArray(),
-                                Base64.NO_PADDING or Base64.NO_WRAP or Base64.URL_SAFE),
-                        if (host.contains(':')) "[$host]" else host, remotePort))
+                .encodedAuthority("$auth@$wrappedHost:$remotePort")
         val configuration = PluginConfiguration(plugin ?: "")
         if (configuration.selected.isNotEmpty())
             builder.appendQueryParameter(Key.plugin, configuration.selectedOptions.toString(false))

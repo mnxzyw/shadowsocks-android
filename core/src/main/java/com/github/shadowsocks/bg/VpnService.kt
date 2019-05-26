@@ -129,11 +129,11 @@ class VpnService : BaseVpnService(), LocalDnsService.Interface {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (DataStore.serviceMode == Key.modeVpn)
-            if (BaseVpnService.prepare(this) != null)
-                startActivity(Intent(this, VpnRequestActivity::class.java)
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            else return super<LocalDnsService.Interface>.onStartCommand(intent, flags, startId)
+        if (DataStore.serviceMode == Key.modeVpn) {
+            if (prepare(this) != null) {
+                startActivity(Intent(this, VpnRequestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            } else return super<LocalDnsService.Interface>.onStartCommand(intent, flags, startId)
+        }
         stopRunner()
         return Service.START_NOT_STICKY
     }
@@ -199,17 +199,14 @@ class VpnService : BaseVpnService(), LocalDnsService.Interface {
 
         val conn = builder.establish() ?: throw NullConnectionException()
         this.conn = conn
-        val fd = conn.fd
 
         val cmd = arrayListOf(File(applicationInfo.nativeLibraryDir, Executable.TUN2SOCKS).absolutePath,
                 "--netif-ipaddr", PRIVATE_VLAN4_ROUTER,
-                "--netif-netmask", "255.255.255.0",
                 "--socks-server-addr", "${DataStore.listenAddress}:${DataStore.portProxy}",
-                "--tunfd", fd.toString(),
                 "--tunmtu", VPN_MTU.toString(),
                 "--sock-path", "sock_path",
                 "--dnsgw", "127.0.0.1:${DataStore.portLocalDns}",
-                "--loglevel", "3")
+                "--loglevel", "warning")
         if (profile.ipv6) {
             cmd += "--netif-ip6addr"
             cmd += PRIVATE_VLAN6_ROUTER

@@ -1,7 +1,7 @@
 /*******************************************************************************
  *                                                                             *
- *  Copyright (C) 2018 by Max Lv <max.c.lv@gmail.com>                          *
- *  Copyright (C) 2018 by Mygod Studio <contact-shadowsocks-android@mygod.be>  *
+ *  Copyright (C) 2019 by Max Lv <max.c.lv@gmail.com>                          *
+ *  Copyright (C) 2019 by Mygod Studio <contact-shadowsocks-android@mygod.be>  *
  *                                                                             *
  *  This program is free software: you can redistribute it and/or modify       *
  *  it under the terms of the GNU General Public License as published by       *
@@ -18,37 +18,22 @@
  *                                                                             *
  *******************************************************************************/
 
-package com.github.shadowsocks.bg
+package com.github.shadowsocks.net
 
-import android.util.Log
-import androidx.core.os.bundleOf
-import com.github.shadowsocks.Core
-import com.github.shadowsocks.core.R
-import com.google.firebase.remoteconfig.FirebaseRemoteConfig
-import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlin.coroutines.resume
+import com.github.shadowsocks.utils.computeIfAbsentCompat
+import com.github.shadowsocks.utils.parseNumericAddress
+import java.net.InetAddress
 
-object RemoteConfig {
-    private val config by lazy { FirebaseRemoteConfig.getInstance().apply { setDefaults(R.xml.default_configs) } }
-
-    private fun Exception.log() {
-        Log.w("RemoteConfig", this)
-        Core.analytics.logEvent("femote_config_failure", bundleOf(Pair(javaClass.simpleName, message)))
-    }
-
-    fun scheduleFetch() = config.fetch().addOnCompleteListener {
-        if (it.isSuccessful) config.activate() else it.exception?.log()
-    }
-
-    suspend fun fetch() = suspendCancellableCoroutine<Pair<FirebaseRemoteConfig, Boolean>> { cont ->
-        config.fetch().addOnCompleteListener {
-            if (it.isSuccessful) {
-                config.activate()
-                cont.resume(config to true)
-            } else {
-                it.exception?.log()
-                cont.resume(config to false)
-            }
+class HostsFile(input: String = "") {
+    private val map = mutableMapOf<String, MutableSet<InetAddress>>()
+    init {
+        for (line in input.lineSequence()) {
+            val entries = line.substringBefore('#').splitToSequence(' ', '\t').filter { it.isNotEmpty() }
+            val address = entries.firstOrNull()?.parseNumericAddress() ?: continue
+            for (hostname in entries.drop(1)) map.computeIfAbsentCompat(hostname) { LinkedHashSet(1) }.add(address)
         }
     }
+
+    val configuredHostnames get() = map.size
+    fun resolve(hostname: String) = map[hostname]?.shuffled() ?: emptyList()
 }

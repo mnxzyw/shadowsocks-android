@@ -1,7 +1,7 @@
 /*******************************************************************************
  *                                                                             *
- *  Copyright (C) 2018 by Max Lv <max.c.lv@gmail.com>                          *
- *  Copyright (C) 2018 by Mygod Studio <contact-shadowsocks-android@mygod.be>  *
+ *  Copyright (C) 2019 by Max Lv <max.c.lv@gmail.com>                          *
+ *  Copyright (C) 2019 by Mygod Studio <contact-shadowsocks-android@mygod.be>  *
  *                                                                             *
  *  This program is free software: you can redistribute it and/or modify       *
  *  it under the terms of the GNU General Public License as published by       *
@@ -18,37 +18,33 @@
  *                                                                             *
  *******************************************************************************/
 
-package com.github.shadowsocks.bg
+package com.github.shadowsocks.preference
 
-import android.util.Log
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import androidx.appcompat.app.AlertDialog
 import androidx.core.os.bundleOf
-import com.github.shadowsocks.Core
-import com.github.shadowsocks.core.R
-import com.google.firebase.remoteconfig.FirebaseRemoteConfig
-import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlin.coroutines.resume
+import androidx.preference.EditTextPreferenceDialogFragmentCompat
+import com.github.shadowsocks.MainActivity
+import com.github.shadowsocks.R
 
-object RemoteConfig {
-    private val config by lazy { FirebaseRemoteConfig.getInstance().apply { setDefaults(R.xml.default_configs) } }
-
-    private fun Exception.log() {
-        Log.w("RemoteConfig", this)
-        Core.analytics.logEvent("femote_config_failure", bundleOf(Pair(javaClass.simpleName, message)))
+class BrowsableEditTextPreferenceDialogFragment : EditTextPreferenceDialogFragmentCompat() {
+    fun setKey(key: String) {
+        arguments = bundleOf(Pair(ARG_KEY, key))
     }
 
-    fun scheduleFetch() = config.fetch().addOnCompleteListener {
-        if (it.isSuccessful) config.activate() else it.exception?.log()
-    }
-
-    suspend fun fetch() = suspendCancellableCoroutine<Pair<FirebaseRemoteConfig, Boolean>> { cont ->
-        config.fetch().addOnCompleteListener {
-            if (it.isSuccessful) {
-                config.activate()
-                cont.resume(config to true)
-            } else {
-                it.exception?.log()
-                cont.resume(config to false)
-            }
+    override fun onPrepareDialogBuilder(builder: AlertDialog.Builder) {
+        super.onPrepareDialogBuilder(builder)
+        builder.setNeutralButton(R.string.browse) { _, _ ->
+            val activity = activity as MainActivity
+            try {
+                targetFragment!!.startActivityForResult(Intent(Intent.ACTION_GET_CONTENT).apply {
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    type = "*/*"
+                }, targetRequestCode)
+                return@setNeutralButton
+            } catch (_: ActivityNotFoundException) { } catch (_: SecurityException) { }
+            activity.snackbar(activity.getString(R.string.file_manager_missing)).show()
         }
     }
 }

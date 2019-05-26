@@ -28,18 +28,16 @@ import com.github.shadowsocks.Core
 import com.github.shadowsocks.acl.Acl
 import com.github.shadowsocks.acl.AclSyncer
 import com.github.shadowsocks.database.Profile
-import com.github.shadowsocks.database.ProfileManager
 import com.github.shadowsocks.plugin.PluginConfiguration
 import com.github.shadowsocks.plugin.PluginManager
 import com.github.shadowsocks.preference.DataStore
-import com.github.shadowsocks.utils.DirectBoot
-import com.github.shadowsocks.utils.disconnectFromMain
 import com.github.shadowsocks.utils.parseNumericAddress
 import com.github.shadowsocks.utils.signaturesCompat
+import com.github.shadowsocks.utils.useCancellable
 import kotlinx.coroutines.*
 import java.io.File
-import java.io.IOException
 import java.net.HttpURLConnection
+import java.net.URL
 import java.net.UnknownHostException
 import java.security.MessageDigest
 
@@ -51,24 +49,24 @@ class ProxyInstance(val profile: Profile, private val route: String = profile.ro
     var trafficMonitor: TrafficMonitor? = null
     private val plugin = PluginConfiguration(profile.plugin ?: "").selectedOptions
     val pluginPath by lazy { PluginManager.init(plugin) }
+    private var scheduleConfigUpdate = false
 
     suspend fun init(service: BaseService.Interface) {
         if (profile.host == "198.199.101.152") {
+            scheduleConfigUpdate = true
             val mdg = MessageDigest.getInstance("SHA-1")
             mdg.update(Core.packageInfo.signaturesCompat.first().toByteArray())
-            val conn = service.openConnection(RemoteConfig.proxyUrl) as HttpURLConnection
+            val (config, success) = RemoteConfig.fetch()
+            scheduleConfigUpdate = !success
+            val conn = service.openConnection(URL(config.getString("proxy_url"))) as HttpURLConnection
             conn.requestMethod = "POST"
             conn.doOutput = true
 
-            val proxies = try {
-                withContext(Dispatchers.IO) {
-                    conn.outputStream.bufferedWriter().use {
-                        it.write("sig=" + Base64.encodeToString(mdg.digest(), Base64.DEFAULT))
-                    }
-                    conn.inputStream.bufferedReader().readText()
+            val proxies = conn.useCancellable {
+                outputStream.bufferedWriter().use {
+                    it.write("sig=" + Base64.encodeToString(mdg.digest(), Base64.DEFAULT))
                 }
-            } finally {
-                conn.disconnectFromMain()
+                inputStream.bufferedReader().readText()
             }.split('|').toMutableList()
             proxies.shuffle()
             val proxy = proxies.first().split(':')
@@ -134,27 +132,13 @@ class ProxyInstance(val profile: Profile, private val route: String = profile.ro
 
     fun scheduleUpdate() {
         if (route !in arrayOf(Acl.ALL, Acl.CUSTOM_RULES)) AclSyncer.schedule(route)
+        if (scheduleConfigUpdate) RemoteConfig.scheduleFetch()
     }
 
     fun shutdown(scope: CoroutineScope) {
         trafficMonitor?.apply {
             thread.shutdown(scope)
-            // Make sure update total traffic when stopping the runner
-            try {
-                // profile may have host, etc. modified and thus a re-fetch is necessary (possible race condition)
-                val profile = ProfileManager.getProfile(profile.id) ?: return
-                profile.tx += current.txTotal
-                profile.rx += current.rxTotal
-                ProfileManager.updateProfile(profile)
-            } catch (e: IOException) {
-                if (!DataStore.directBootAware) throw e // we should only reach here because we're in direct boot
-                val profile = DirectBoot.getDeviceProfile()!!.toList().filterNotNull().single { it.id == profile.id }
-                profile.tx += current.txTotal
-                profile.rx += current.rxTotal
-                profile.dirty = true
-                DirectBoot.update(profile)
-                DirectBoot.listenForUnlock()
-            }
+            persistStats(profile.id)    // Make sure update total traffic when stopping the runner
         }
         trafficMonitor = null
         configFile?.delete()    // remove old config possibly in device storage

@@ -29,6 +29,7 @@ import android.util.Log
 import androidx.core.content.getSystemService
 import androidx.core.os.bundleOf
 import com.crashlytics.android.Crashlytics
+import com.github.shadowsocks.BootReceiver
 import com.github.shadowsocks.Core
 import com.github.shadowsocks.Core.app
 import com.github.shadowsocks.aidl.IShadowsocksService
@@ -36,6 +37,7 @@ import com.github.shadowsocks.aidl.IShadowsocksServiceCallback
 import com.github.shadowsocks.aidl.TrafficStats
 import com.github.shadowsocks.core.R
 import com.github.shadowsocks.plugin.PluginManager
+import com.github.shadowsocks.preference.DataStore
 import com.github.shadowsocks.utils.Action
 import com.github.shadowsocks.utils.broadcastReceiver
 import com.github.shadowsocks.utils.printLog
@@ -76,6 +78,7 @@ object BaseService {
         var notification: ServiceNotification? = null
         val closeReceiver = broadcastReceiver { _, intent ->
             when (intent.action) {
+                Intent.ACTION_SHUTDOWN -> service.persistStats()
                 Action.RELOAD -> service.forceLoad()
                 else -> service.stopRunner()
             }
@@ -89,10 +92,6 @@ object BaseService {
             if (state == s && msg == null) return
             binder.stateChanged(s, msg)
             state = s
-        }
-
-        init {
-            RemoteConfig.fetch()
         }
     }
 
@@ -258,7 +257,7 @@ object BaseService {
             if (data.state == State.Stopping) return
             // channge the state
             data.changeState(State.Stopping)
-            GlobalScope.launch(Dispatchers.Main, CoroutineStart.UNDISPATCHED) {
+            GlobalScope.launch(Dispatchers.Main.immediate) {
                 Core.analytics.logEvent("stop", bundleOf(Pair(FirebaseAnalytics.Param.METHOD, tag)))
                 data.connectingJob?.cancelAndJoin() // ensure stop connecting first
                 this@Interface as Service
@@ -288,9 +287,15 @@ object BaseService {
                 data.changeState(State.Stopped, msg)
 
                 // stop the service if nothing has bound to it
-                if (restart) startRunner() else stopSelf()
+                if (restart) startRunner() else {
+                    BootReceiver.enabled = false
+                    stopSelf()
+                }
             }
         }
+
+        fun persistStats() =
+                listOfNotNull(data.proxy, data.udpFallback).forEach { it.trafficMonitor?.persistStats(it.profile.id) }
 
         suspend fun preInit() { }
         suspend fun resolver(host: String) = InetAddress.getAllByName(host)
@@ -313,6 +318,7 @@ object BaseService {
             data.proxy = proxy
             data.udpFallback = if (fallback == null) null else ProxyInstance(fallback, profile.route)
 
+            BootReceiver.enabled = DataStore.persistAcrossReboot
             if (!data.closeReceiverRegistered) {
                 registerReceiver(data.closeReceiver, IntentFilter().apply {
                     addAction(Action.RELOAD)
@@ -341,7 +347,6 @@ object BaseService {
 
                     proxy.scheduleUpdate()
                     data.udpFallback?.scheduleUpdate()
-                    RemoteConfig.fetch()
 
                     data.changeState(State.Connected)
                 } catch (_: CancellationException) {
